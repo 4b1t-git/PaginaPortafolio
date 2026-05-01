@@ -1,6 +1,5 @@
 import Navbar from '@/components/nav/Navbar'
 import CustomCursor from '@/components/ui/CustomCursor'
-import DotField from '@/components/hero/DotField'
 import Hero from '@/components/hero/Hero'
 import Gallery from '@/components/gallery/Gallery'
 import About from '@/components/sections/About'
@@ -14,7 +13,6 @@ export default function App() {
 
   return (
     <>
-      <DotField />
       <CustomCursor />
       <Navbar />
 

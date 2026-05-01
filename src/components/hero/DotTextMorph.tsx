@@ -7,17 +7,15 @@ type Props = {
   font?: string
   cell?: number
   dotRadius?: number
+  fallDistance?: number
   className?: string
 }
 
-type Dot = {
-  fromX: number
-  fromY: number
-  toX: number
-  toY: number
+type Sampled = {
+  x: number
+  y: number
   phase: number
   seed: number
-  active: boolean
 }
 
 function sampleText(
@@ -26,7 +24,7 @@ function sampleText(
   cell: number,
   width: number,
   height: number,
-): { x: number; y: number }[] {
+): Sampled[] {
   const off = document.createElement('canvas')
   off.width = width
   off.height = height
@@ -49,29 +47,39 @@ function sampleText(
   ctx.fillText(text, width / 2, height / 2)
 
   const img = ctx.getImageData(0, 0, width, height).data
-  const points: { x: number; y: number }[] = []
+  const points: Sampled[] = []
   for (let y = 0; y < height; y += cell) {
     for (let x = 0; x < width; x += cell) {
       const i = (y * width + x) * 4
       if (img[i] > 128) {
-        points.push({ x: x + cell / 2, y: y + cell / 2 })
+        points.push({
+          x: x + cell / 2,
+          y: y + cell / 2,
+          phase: Math.random() * Math.PI * 2,
+          seed: Math.random(),
+        })
       }
     }
   }
   return points
 }
 
-function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3)
+}
+
+function easeInCubic(t: number): number {
+  return t * t * t
 }
 
 export default function DotTextMorph({
   words,
-  intervalMs = 2600,
-  morphMs = 1100,
+  intervalMs = 2800,
+  morphMs = 900,
   font = "'Silkscreen', 'Courier New', monospace",
   cell = 7,
   dotRadius = 2.2,
+  fallDistance = 90,
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -84,9 +92,10 @@ export default function DotTextMorph({
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    let dots: Dot[] = []
+    let currentDots: Sampled[] = []
+    let outgoingDots: Sampled[] = []
     let wordIndex = 0
-    let morphStart = performance.now()
+    let morphStart = -Infinity
     let scheduled: number | null = null
     let rafId: number
     let width = 0
@@ -101,39 +110,22 @@ export default function DotTextMorph({
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      buildDots(words[wordIndex], words[wordIndex])
-      morphStart = performance.now() - morphMs
+      currentDots = sampleText(words[wordIndex], font, cell, width, height)
+      outgoingDots = []
+      morphStart = -Infinity
     }
 
-    function buildDots(fromText: string, toText: string) {
-      const fromPts = sampleText(fromText, font, cell, width, height)
-      const toPts = sampleText(toText, font, cell, width, height)
-      const max = Math.max(fromPts.length, toPts.length)
-      const next: Dot[] = []
-      for (let i = 0; i < max; i++) {
-        const prev = dots[i]
-        const f = fromPts[i % fromPts.length] ?? { x: width / 2, y: height / 2 }
-        const t = toPts[i % toPts.length] ?? { x: width / 2, y: height / 2 }
-        next.push({
-          fromX: f.x,
-          fromY: f.y,
-          toX: t.x,
-          toY: t.y,
-          phase: prev?.phase ?? Math.random() * Math.PI * 2,
-          seed: prev?.seed ?? Math.random(),
-          active: i < toPts.length || i < fromPts.length,
-        })
-      }
-      dots = next
+    function nextWord() {
+      outgoingDots = currentDots
+      wordIndex = (wordIndex + 1) % words.length
+      currentDots = sampleText(words[wordIndex], font, cell, width, height)
+      morphStart = performance.now()
     }
 
     function scheduleNext() {
       if (scheduled) clearTimeout(scheduled)
       scheduled = window.setTimeout(() => {
-        const fromIdx = wordIndex
-        wordIndex = (wordIndex + 1) % words.length
-        buildDots(words[fromIdx], words[wordIndex])
-        morphStart = performance.now()
+        nextWord()
         scheduleNext()
       }, intervalMs)
     }
@@ -143,54 +135,76 @@ export default function DotTextMorph({
         rafId = requestAnimationFrame(draw)
         return
       }
-      const elapsedMorph = Math.min(1, (now - morphStart) / morphMs)
-      const e = easeInOutCubic(elapsedMorph)
+
+      const morphElapsed = (now - morphStart) / morphMs
+      const morphing = morphElapsed >= 0 && morphElapsed <= 1
+      const progress = Math.max(0, Math.min(1, morphElapsed))
       const time = now / 1000
 
       ctx.clearRect(0, 0, width, height)
-      const fg = getComputedStyle(document.documentElement)
-        .getPropertyValue('--fg')
-        .trim() || '10 10 10'
-      const fgRgb = fg.replaceAll(' ', ',')
+      const fg = (
+        getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() ||
+        '10 10 10'
+      ).replaceAll(' ', ',')
 
-      const morphJitter = (1 - e) * 7
+      const drawDot = (
+        d: Sampled,
+        offsetY: number,
+        alphaMul: number,
+        idleAmp: number,
+      ) => {
+        const breathe = reduced ? 0.7 : Math.sin(time * 1.6 + d.phase) * 0.5 + 0.5
+        const flicker = reduced ? 1 : Math.sin(time * 0.9 + d.phase * 1.7 + d.seed * 6.28) * 0.5 + 0.5
 
-      for (let i = 0; i < dots.length; i++) {
-        const d = dots[i]
-
-        const baseX = d.fromX + (d.toX - d.fromX) * e
-        const baseY = d.fromY + (d.toY - d.fromY) * e
-
-        const breathe = reduced ? 0 : Math.sin(time * 1.6 + d.phase) * 0.5 + 0.5
-        const flicker = reduced
+        const jx = reduced
           ? 0
-          : Math.sin(time * 0.9 + d.phase * 1.7 + d.seed * 6.28) * 0.5 + 0.5
+          : (Math.sin(time * 2.1 + d.phase * 3.1) +
+              Math.sin(time * 0.7 + d.seed * 9)) *
+            idleAmp
+        const jy = reduced
+          ? 0
+          : (Math.cos(time * 1.7 + d.phase * 2.3) +
+              Math.cos(time * 0.6 + d.seed * 11)) *
+            idleAmp
 
-        const idleJitter = reduced ? 0 : 0.9
-        const jx =
-          (Math.sin(time * 2.1 + d.phase * 3.1) + Math.sin(time * 0.7 + d.seed * 9)) *
-          idleJitter
-        const jy =
-          (Math.cos(time * 1.7 + d.phase * 2.3) + Math.cos(time * 0.6 + d.seed * 11)) *
-          idleJitter
-
-        const morphJx = (Math.random() - 0.5) * morphJitter
-        const morphJy = (Math.random() - 0.5) * morphJitter
-
-        const x = baseX + jx + morphJx
-        const y = baseY + jy + morphJy
-
+        const x = d.x + jx
+        const y = d.y + jy + offsetY
         const radius = dotRadius * (0.55 + breathe * 0.55)
-        const alpha = 0.35 + flicker * 0.65
+        const alpha = (0.35 + flicker * 0.65) * alphaMul
 
-        const dropOut = !reduced && flicker < 0.08 ? 0 : 1
-        if (dropOut === 0) continue
+        if (alpha < 0.04) return
 
         ctx.beginPath()
-        ctx.fillStyle = `rgba(${fgRgb}, ${alpha.toFixed(3)})`
+        ctx.fillStyle = `rgba(${fg}, ${alpha.toFixed(3)})`
         ctx.arc(x, y, Math.max(0.3, radius), 0, Math.PI * 2)
         ctx.fill()
       }
+
+      // outgoing: fall down + fade out
+      if (morphing && outgoingDots.length) {
+        const eOut = easeInCubic(progress)
+        const offY = eOut * fallDistance
+        const alphaOut = 1 - progress
+        for (let i = 0; i < outgoingDots.length; i++) {
+          drawDot(outgoingDots[i], offY, alphaOut, 0.4)
+        }
+      }
+
+      // incoming/current: drop in from above + fade in (or settled idle)
+      if (currentDots.length) {
+        let offY = 0
+        let alphaIn = 1
+        if (morphing) {
+          const eIn = easeOutCubic(progress)
+          offY = -fallDistance * (1 - eIn)
+          alphaIn = progress
+        }
+        const idleAmp = morphing ? 0.4 : 0.9
+        for (let i = 0; i < currentDots.length; i++) {
+          drawDot(currentDots[i], offY, alphaIn, idleAmp)
+        }
+      }
+
       rafId = requestAnimationFrame(draw)
     }
 
@@ -205,11 +219,14 @@ export default function DotTextMorph({
       if (scheduled) clearTimeout(scheduled)
       ro.disconnect()
     }
-  }, [words, intervalMs, morphMs, font, cell, dotRadius])
+  }, [words, intervalMs, morphMs, font, cell, dotRadius, fallDistance])
 
   return (
     <div ref={wrapRef} className={className} style={{ position: 'relative' }}>
-      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%', height: '100%' }}
+      />
     </div>
   )
 }
