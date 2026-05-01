@@ -154,26 +154,21 @@ export default function DotTextMorph({
         alphaMul: number,
         idleAmp: number,
       ) => {
-        const breathe = reduced ? 0.7 : Math.sin(time * 1.6 + d.phase) * 0.5 + 0.5
-        const flicker = reduced ? 1 : Math.sin(time * 0.9 + d.phase * 1.7 + d.seed * 6.28) * 0.5 + 0.5
+        const breathe = reduced ? 0.85 : Math.sin(time * 1.1 + d.phase) * 0.5 + 0.5
 
         const jx = reduced
           ? 0
-          : (Math.sin(time * 2.1 + d.phase * 3.1) +
-              Math.sin(time * 0.7 + d.seed * 9)) *
-            idleAmp
+          : Math.sin(time * 0.9 + d.phase * 2.3 + d.seed * 5) * idleAmp
         const jy = reduced
           ? 0
-          : (Math.cos(time * 1.7 + d.phase * 2.3) +
-              Math.cos(time * 0.6 + d.seed * 11)) *
-            idleAmp
+          : Math.cos(time * 0.7 + d.phase * 1.9 + d.seed * 7) * idleAmp
 
         const x = d.x + jx
         const y = d.y + jy + offsetY
-        const radius = dotRadius * (0.55 + breathe * 0.55)
-        const alpha = (0.35 + flicker * 0.65) * alphaMul
+        const radius = dotRadius * (0.75 + breathe * 0.3)
+        const alpha = 0.92 * alphaMul
 
-        if (alpha < 0.04) return
+        if (alpha < 0.02) return
 
         ctx.beginPath()
         ctx.fillStyle = `rgba(${fg}, ${alpha.toFixed(3)})`
@@ -187,7 +182,7 @@ export default function DotTextMorph({
         const offY = eOut * fallDistance
         const alphaOut = smoothstep(1 - progress)
         for (let i = 0; i < outgoingDots.length; i++) {
-          drawDot(outgoingDots[i], offY, alphaOut, 0.3)
+          drawDot(outgoingDots[i], offY, alphaOut, 0.2)
         }
       }
 
@@ -200,7 +195,7 @@ export default function DotTextMorph({
           offY = -fallDistance * (1 - eIn)
           alphaIn = smoothstep(progress)
         }
-        const idleAmp = morphing ? 0.35 : 0.9
+        const idleAmp = morphing ? 0.25 : 0.6
         for (let i = 0; i < currentDots.length; i++) {
           drawDot(currentDots[i], offY, alphaIn, idleAmp)
         }
