@@ -64,22 +64,23 @@ function sampleText(
   return points
 }
 
-function easeOutCubic(t: number): number {
-  return 1 - Math.pow(1 - t, 3)
+function easeInOutQuint(t: number): number {
+  return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2
 }
 
-function easeInCubic(t: number): number {
-  return t * t * t
+function smoothstep(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
 }
 
 export default function DotTextMorph({
   words,
-  intervalMs = 2800,
-  morphMs = 900,
+  intervalMs = 3200,
+  morphMs = 1500,
   font = "'Silkscreen', 'Courier New', monospace",
   cell = 7,
   dotRadius = 2.2,
-  fallDistance = 90,
+  fallDistance = 50,
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -180,26 +181,26 @@ export default function DotTextMorph({
         ctx.fill()
       }
 
-      // outgoing: fall down + fade out
+      // outgoing: drift down + fade out (gentle, overlaps with incoming)
       if (morphing && outgoingDots.length) {
-        const eOut = easeInCubic(progress)
+        const eOut = easeInOutQuint(progress)
         const offY = eOut * fallDistance
-        const alphaOut = 1 - progress
+        const alphaOut = smoothstep(1 - progress)
         for (let i = 0; i < outgoingDots.length; i++) {
-          drawDot(outgoingDots[i], offY, alphaOut, 0.4)
+          drawDot(outgoingDots[i], offY, alphaOut, 0.3)
         }
       }
 
-      // incoming/current: drop in from above + fade in (or settled idle)
+      // incoming/current: drift in from above + fade in
       if (currentDots.length) {
         let offY = 0
         let alphaIn = 1
         if (morphing) {
-          const eIn = easeOutCubic(progress)
+          const eIn = easeInOutQuint(progress)
           offY = -fallDistance * (1 - eIn)
-          alphaIn = progress
+          alphaIn = smoothstep(progress)
         }
-        const idleAmp = morphing ? 0.4 : 0.9
+        const idleAmp = morphing ? 0.35 : 0.9
         for (let i = 0; i < currentDots.length; i++) {
           drawDot(currentDots[i], offY, alphaIn, idleAmp)
         }

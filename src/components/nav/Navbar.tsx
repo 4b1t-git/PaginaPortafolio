@@ -14,7 +14,7 @@ export default function Navbar() {
           href="#top"
           className="font-display text-lg uppercase tracking-[0.2em] hover:opacity-70 transition-opacity"
         >
-          4B1T
+          Ignacio R.
         </a>
 
         <nav className="hidden md:flex items-center gap-1">
