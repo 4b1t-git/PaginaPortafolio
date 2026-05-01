@@ -43,3 +43,48 @@
     color: var(--color-fg);
   }
 }
+
+@layer components {
+  html.has-custom-cursor,
+  html.has-custom-cursor * {
+    cursor: none !important;
+  }
+
+  .custom-cursor-dot,
+  .custom-cursor-ring {
+    position: fixed;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 9999;
+    will-change: transform;
+  }
+
+  .custom-cursor-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: rgb(var(--fg));
+    mix-blend-mode: difference;
+  }
+
+  .custom-cursor-ring {
+    width: 36px;
+    height: 36px;
+    border-radius: 9999px;
+    border: 1px solid rgb(var(--fg) / 0.55);
+    transition:
+      width 0.25s ease,
+      height 0.25s ease,
+      border-color 0.25s ease,
+      background-color 0.25s ease;
+    mix-blend-mode: difference;
+  }
+
+  .custom-cursor-ring[data-hover='true'] {
+    width: 56px;
+    height: 56px;
+    border-color: var(--color-accent-lime);
+    background: rgb(232 255 107 / 0.12);
+  }
+}
