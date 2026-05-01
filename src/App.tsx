@@ -2,6 +2,7 @@ import Navbar from '@/components/nav/Navbar'
 import CustomCursor from '@/components/ui/CustomCursor'
 import DotField from '@/components/hero/DotField'
 import Hero from '@/components/hero/Hero'
+import Gallery from '@/components/gallery/Gallery'
 import { useLenis } from '@/hooks/useLenis'
 
 export default function App() {
@@ -16,12 +17,7 @@ export default function App() {
       <main id="top" className="relative z-10">
         <Hero />
 
-        <section
-          id="proyectos"
-          className="min-h-dvh flex items-center justify-center px-6 border-t border-current/10"
-        >
-          <p className="font-mono opacity-50">[Proyectos — placeholder]</p>
-        </section>
+        <Gallery />
 
         <section
           id="sobre-mi"
