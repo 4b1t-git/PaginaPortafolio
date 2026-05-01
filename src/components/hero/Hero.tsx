@@ -14,7 +14,7 @@ export default function Hero() {
         </span>
 
         <DotTextMorph
-          words={['FRONTEND', 'DESIGN', 'CODE', '4B1T']}
+          words={['FRONTEND', 'DESIGN', 'CODE', 'IGNACIO']}
           className="w-full max-w-5xl h-[34vh] md:h-[44vh]"
         />
 
