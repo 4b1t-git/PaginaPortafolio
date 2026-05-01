@@ -181,13 +181,15 @@ export default function DotTextMorph({
         ctx.fill()
       }
 
+      const idleAmp = 0.9
+
       // outgoing: drift down + fade out (gentle, overlaps with incoming)
       if (morphing && outgoingDots.length) {
         const eOut = easeInOutQuint(progress)
         const offY = eOut * fallDistance
         const alphaOut = smoothstep(1 - progress)
         for (let i = 0; i < outgoingDots.length; i++) {
-          drawDot(outgoingDots[i], offY, alphaOut, 0.3)
+          drawDot(outgoingDots[i], offY, alphaOut, idleAmp)
         }
       }
 
@@ -200,7 +202,6 @@ export default function DotTextMorph({
           offY = -fallDistance * (1 - eIn)
           alphaIn = smoothstep(progress)
         }
-        const idleAmp = morphing ? 0.35 : 0.9
         for (let i = 0; i < currentDots.length; i++) {
           drawDot(currentDots[i], offY, alphaIn, idleAmp)
         }
