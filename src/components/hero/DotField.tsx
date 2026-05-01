@@ -10,11 +10,12 @@ type Props = {
 
 export default function DotField({
   className,
-  cell = 22,
+  cell,
   baseRadius = 1.1,
   influenceRadius = 220,
   influenceStrength = 4.5,
 }: Props) {
+  const resolvedCell = cell ?? (typeof window !== 'undefined' && window.innerWidth < 768 ? 32 : 22)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -53,6 +54,10 @@ export default function DotField({
     }
 
     function draw(now: number) {
+      if (document.hidden) {
+        rafId = requestAnimationFrame(draw)
+        return
+      }
       const t = (now - start) / 1000
       mouseX += (targetMouseX - mouseX) * 0.18
       mouseY += (targetMouseY - mouseY) * 0.18
@@ -60,17 +65,17 @@ export default function DotField({
       ctx.clearRect(0, 0, width, height)
       const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() || '10 10 10'
 
-      const cols = Math.ceil(width / cell) + 1
-      const rows = Math.ceil(height / cell) + 1
-      const offsetX = (width - (cols - 1) * cell) / 2
-      const offsetY = (height - (rows - 1) * cell) / 2
+      const cols = Math.ceil(width / resolvedCell) + 1
+      const rows = Math.ceil(height / resolvedCell) + 1
+      const offsetX = (width - (cols - 1) * resolvedCell) / 2
+      const offsetY = (height - (rows - 1) * resolvedCell) / 2
 
       const infR2 = influenceRadius * influenceRadius
 
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
-          const x = offsetX + i * cell
-          const y = offsetY + j * cell
+          const x = offsetX + i * resolvedCell
+          const y = offsetY + j * resolvedCell
 
           const dx = x - mouseX
           const dy = y - mouseY
@@ -109,7 +114,7 @@ export default function DotField({
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseleave', onLeave)
     }
-  }, [cell, baseRadius, influenceRadius, influenceStrength])
+  }, [resolvedCell, baseRadius, influenceRadius, influenceStrength])
 
   return (
     <canvas
