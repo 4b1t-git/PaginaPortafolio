@@ -15,7 +15,10 @@ function DitherOverlay({ active }: { active: boolean }) {
     let rafId = 0
     let w = 0
     let h = 0
-    const cell = 6
+    const cell = 7
+    // Fases por celda — fijas durante la vida del canvas. Hacen que cada
+    // punto respire en su propio compás sin parpadeo aleatorio por frame.
+    let phases: Float32Array = new Float32Array(0)
 
     function resize() {
       const r = canvas!.parentElement!.getBoundingClientRect()
@@ -26,21 +29,31 @@ function DitherOverlay({ active }: { active: boolean }) {
       canvas!.style.width = `${w}px`
       canvas!.style.height = `${h}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      const cols = Math.ceil(w / cell)
+      const rows = Math.ceil(h / cell)
+      phases = new Float32Array(cols * rows)
+      for (let n = 0; n < phases.length; n++) phases[n] = Math.random() * Math.PI * 2
     }
 
-    function draw() {
+    function draw(now: number) {
+      const t = now / 1000
       ctx.clearRect(0, 0, w, h)
       const cols = Math.ceil(w / cell)
       const rows = Math.ceil(h / cell)
       ctx.fillStyle = '#0a0a0a'
+      // Onda base lenta + pulso por celda. Velocidad ~0.6 rad/s = ciclo
+      // ~10s, deliberadamente suave para casar con el hero.
+      const baseW = 0.25 + 0.25 * Math.sin(t * 0.4)
       for (let i = 0; i < cols; i++) {
         for (let j = 0; j < rows; j++) {
-          if (Math.random() > 0.55) {
-            const r = Math.random() * 2 + 0.5
-            ctx.beginPath()
-            ctx.arc(i * cell + cell / 2, j * cell + cell / 2, r, 0, Math.PI * 2)
-            ctx.fill()
-          }
+          const ph = phases[i * rows + j]
+          const breathe = 0.5 + 0.5 * Math.sin(t * 0.6 + ph)
+          const visible = baseW + breathe * 0.55
+          if (visible < 0.55) continue
+          const r = 0.6 + breathe * 1.6
+          ctx.beginPath()
+          ctx.arc(i * cell + cell / 2, j * cell + cell / 2, r, 0, Math.PI * 2)
+          ctx.fill()
         }
       }
       rafId = requestAnimationFrame(draw)
@@ -60,8 +73,8 @@ function DitherOverlay({ active }: { active: boolean }) {
   return (
     <canvas
       ref={ref}
-      className="absolute inset-0 pointer-events-none transition-opacity duration-300"
-      style={{ opacity: active ? 0.85 : 0 }}
+      className="absolute inset-0 pointer-events-none transition-opacity duration-700 ease-out"
+      style={{ opacity: active ? 0.8 : 0 }}
       aria-hidden
     />
   )
@@ -75,7 +88,7 @@ export default function ProjectCard({ project }: Props) {
     <article
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="group relative overflow-hidden rounded-3xl border border-current/10 bg-current/[0.03] aspect-[4/3] transition-all duration-300 hover:border-current/30"
+      className="group relative overflow-hidden rounded-3xl border border-current/10 bg-current/[0.03] aspect-[4/3] transition-all duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-current/30"
       data-cursor="hover"
     >
       <div className="absolute inset-0 flex items-center justify-center">
@@ -83,7 +96,9 @@ export default function ProjectCard({ project }: Props) {
           <img
             src={project.image}
             alt={project.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
           />
         ) : (
           <div className="flex flex-col items-center gap-3 opacity-60">
@@ -99,7 +114,7 @@ export default function ProjectCard({ project }: Props) {
 
       <DitherOverlay active={hover} />
 
-      <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between gap-4 bg-gradient-to-t from-black/40 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+      <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between gap-4 bg-gradient-to-t from-black/40 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]">
         <div>
           <h3 className="font-display text-lg uppercase tracking-wider">
             {project.name}

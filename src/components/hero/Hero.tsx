@@ -1,11 +1,11 @@
 import DotTextMorph from '@/components/hero/DotTextMorph'
-import DotMountains from '@/components/hero/DotMountains'
+import HeroDotMatrix from '@/components/hero/HeroDotMatrix'
 import MagneticButton from '@/components/ui/MagneticButton'
 
 export default function Hero() {
   return (
     <section className="relative min-h-dvh overflow-hidden flex flex-col items-center justify-center px-6 pt-28 pb-16">
-      <DotMountains />
+      <HeroDotMatrix />
 
       <div className="relative z-10 flex flex-col items-center w-full">
         <span className="mb-6 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] opacity-60">

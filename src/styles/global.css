@@ -4,19 +4,19 @@
   --font-display: 'Silkscreen', 'Courier New', monospace;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  --color-bg: #f5f5f3;
+  --color-bg: #f0ead6;
   --color-fg: #0a0a0a;
   --color-accent-lime: #e8ff6b;
   --color-accent-pink: #ff8fb1;
   --color-muted: #8a8a8a;
   --color-card: #0a0a0a;
-  --color-card-fg: #f5f5f3;
+  --color-card-fg: #f0ead6;
 }
 
 @layer base {
   :root {
     color-scheme: light;
-    --bg: 245 245 243;
+    --bg: 240 234 214;
     --fg: 10 10 10;
   }
 
