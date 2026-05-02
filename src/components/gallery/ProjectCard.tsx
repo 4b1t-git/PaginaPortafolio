@@ -92,30 +92,13 @@ export default function ProjectCard({ project }: Props) {
       data-cursor="hover"
     >
       <div className="absolute inset-0 flex items-center justify-center">
-        {project.embed ? (
-          // Preview con iframe escalado: el sitio se renderiza a un ancho
-          // de 250% del card y se reduce con transform al 40%, dejando un
-          // viewport equivalente a desktop (~2.5x el ancho del card).
-          // pointer-events:none impide interacción; el script principal
-          // ya fue removido al copiar el sitio a /public.
-          <iframe
-            src={`${import.meta.env.BASE_URL}${project.embed}`}
-            title={project.name}
-            loading="lazy"
-            tabIndex={-1}
-            scrolling="no"
-            aria-hidden
-            className="border-0 origin-top-left transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[0.42]"
-            style={{
-              width: '250%',
-              height: '250%',
-              transform: 'scale(0.4)',
-              pointerEvents: 'none',
-            }}
-          />
-        ) : project.image ? (
+        {project.image ? (
           <img
-            src={project.image}
+            src={
+              project.image.startsWith('http') || project.image.startsWith('/')
+                ? project.image
+                : `${import.meta.env.BASE_URL}${project.image}`
+            }
             alt={project.name}
             loading="lazy"
             decoding="async"
