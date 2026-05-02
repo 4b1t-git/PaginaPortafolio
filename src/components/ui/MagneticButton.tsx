@@ -30,6 +30,29 @@ export default function MagneticButton({
     let ty = 0
     let cx = 0
     let cy = 0
+    let running = false
+
+    const tick = () => {
+      cx += (tx - cx) * 0.18
+      cy += (ty - cy) * 0.18
+      el.style.transform = `translate3d(${cx}px, ${cy}px, 0)`
+      // Detén el RAF cuando el botón vuelve al reposo: nada que animar
+      // hasta el próximo mouseenter.
+      if (tx === 0 && ty === 0 && Math.abs(cx) < 0.1 && Math.abs(cy) < 0.1) {
+        cx = 0
+        cy = 0
+        el.style.transform = 'translate3d(0,0,0)'
+        running = false
+        return
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+
+    const start = () => {
+      if (running) return
+      running = true
+      rafId = requestAnimationFrame(tick)
+    }
 
     const onMove = (e: globalThis.MouseEvent) => {
       const r = el.getBoundingClientRect()
@@ -37,19 +60,13 @@ export default function MagneticButton({
       const dy = e.clientY - (r.top + r.height / 2)
       tx = dx * strength
       ty = dy * strength
+      start()
     }
     const onLeave = () => {
       tx = 0
       ty = 0
+      start()
     }
-
-    const tick = () => {
-      cx += (tx - cx) * 0.18
-      cy += (ty - cy) * 0.18
-      el.style.transform = `translate3d(${cx}px, ${cy}px, 0)`
-      rafId = requestAnimationFrame(tick)
-    }
-    rafId = requestAnimationFrame(tick)
 
     el.addEventListener('mousemove', onMove)
     el.addEventListener('mouseleave', onLeave)
