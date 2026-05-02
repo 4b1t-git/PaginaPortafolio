@@ -7,7 +7,7 @@ export default function Hero() {
     <section className="relative min-h-dvh overflow-hidden flex flex-col items-center justify-center px-6 pt-28 pb-16">
       <HeroDotMatrix />
 
-      <div className="relative z-10 flex flex-col items-center w-full">
+      <div className="relative z-10 flex flex-col items-center w-full md:-mt-16 lg:-mt-24">
         <span className="mb-6 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] opacity-60">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
           Disponible para proyectos
