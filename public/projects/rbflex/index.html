@@ -202,6 +202,12 @@
       transform: scale(1) !important;
       pointer-events: auto !important;
     }
+    /* Oculta la barra de scroll del iframe (línea blanca a la derecha
+       que se veía en la card preview). Mantiene el scroll funcional
+       para la vista standalone. */
+    html { scrollbar-width: none; }
+    html::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    body { scrollbar-gutter: auto; }
 
     /* ───── Portfolio preview banner (inyectado) ───── */
     .pp-preview-banner {
