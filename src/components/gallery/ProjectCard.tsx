@@ -185,9 +185,15 @@ export default function ProjectCard({ project }: Props) {
     </article>
   )
 
-  if (project.url) {
+  // Si hay embed, el click va al preview local (con banner que enlaza al
+  // sitio real). Si no, al url externo.
+  const cardHref = project.embed
+    ? `${import.meta.env.BASE_URL}${project.embed}`
+    : project.url
+
+  if (cardHref) {
     return (
-      <a href={project.url} target="_blank" rel="noopener noreferrer" className="block">
+      <a href={cardHref} target="_blank" rel="noopener noreferrer" className="block">
         {inner}
       </a>
     )
