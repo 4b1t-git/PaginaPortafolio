@@ -192,8 +192,16 @@ export default function ProjectCard({ project }: Props) {
     : project.url
 
   if (cardHref) {
+    // Embed local → misma pestaña (es parte del portfolio).
+    // Url externo → pestaña nueva.
+    const sameTab = !!project.embed
     return (
-      <a href={cardHref} target="_blank" rel="noopener noreferrer" className="block">
+      <a
+        href={cardHref}
+        target={sameTab ? '_self' : '_blank'}
+        rel={sameTab ? undefined : 'noopener noreferrer'}
+        className="block"
+      >
         {inner}
       </a>
     )
