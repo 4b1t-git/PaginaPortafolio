@@ -214,7 +214,8 @@ export default function DotTextMorph({
         ctx.fill()
       }
 
-      const idleAmp = 0.9
+      // Amplitud de jitter idle reducida para mantener las letras legibles.
+      const idleAmp = 0.4
 
       // outgoing: drift down + fade out (gentle, overlaps with incoming)
       if (morphing && outgoingDots.length) {
