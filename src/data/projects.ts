@@ -4,6 +4,8 @@ export type Project = {
   description: string
   url?: string
   image?: string
+  /** Ruta a una página estática bajo /public para previsualización en iframe. */
+  embed?: string
   stack: string[]
   tags: ('web' | 'ecommerce' | 'landing' | 'app')[]
   year?: number
@@ -17,7 +19,7 @@ export const projects: Project[] = [
     description:
       'Landing para empresa de reparación hidráulica en Chile. Maquetada custom, SEO técnico, datos estructurados.',
     url: 'https://rb-flex.com/',
-    image: 'projects/rbflex/images/ogimage.png',
+    embed: 'projects/rbflex/index.html',
     stack: ['HTML', 'CSS', 'JS'],
     tags: ['landing', 'web'],
     year: 2025,

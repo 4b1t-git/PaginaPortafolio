@@ -90,31 +90,64 @@ export default function ProjectCard({ project }: Props) {
       onMouseLeave={() => setHover(false)}
       className="group relative overflow-hidden rounded-3xl border border-current/10 bg-current/[0.03] aspect-[4/3] transition-all duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-current/30"
       data-cursor="hover"
+      // container-type: inline-size — habilita unidades cqw para que el
+      // iframe escale relativo al ancho del card (ver style del iframe).
+      style={{ containerType: 'inline-size' }}
     >
-      <div className="absolute inset-0 flex items-center justify-center">
-        {project.image ? (
-          <img
-            src={
-              project.image.startsWith('http') || project.image.startsWith('/')
-                ? project.image
-                : `${import.meta.env.BASE_URL}${project.image}`
-            }
-            alt={project.name}
+      {project.embed ? (
+        // Preview con iframe escalado: contenedor absoluto SIN flex
+        // (los hijos absolute con transform-origin no juegan bien con
+        // flex-center). El iframe usa pixel size fijo de desktop
+        // (1440x1080) y se reduce con CSS variable --fx-scale para
+        // encajar en el card 4:3. main.js fue removido al copiar a /public.
+        <div className="absolute inset-0 overflow-hidden">
+          <iframe
+            src={`${import.meta.env.BASE_URL}${project.embed}`}
+            title={project.name}
             loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
+            tabIndex={-1}
+            aria-hidden
+            className="border-0 origin-top-left transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '1440px',
+              height: '1080px',
+              // Escala = cardWidth / 1440 vía container queries (cqw es
+              // 1% del ancho del container = el <article>). Resultado:
+              // el iframe siempre ocupa exactamente el ancho del card.
+              transform: 'scale(calc(100cqw / 1440px))',
+              pointerEvents: 'none',
+            }}
           />
-        ) : (
-          <div className="flex flex-col items-center gap-3 opacity-60">
-            <div className="h-14 w-14 rounded-2xl border border-current/30 grid place-items-center">
-              <span className="font-display text-xl">⌗</span>
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          {project.image ? (
+            <img
+              src={
+                project.image.startsWith('http') || project.image.startsWith('/')
+                  ? project.image
+                  : `${import.meta.env.BASE_URL}${project.image}`
+              }
+              alt={project.name}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-3 opacity-60">
+              <div className="h-14 w-14 rounded-2xl border border-current/30 grid place-items-center">
+                <span className="font-display text-xl">⌗</span>
+              </div>
+              <span className="font-mono text-[10px] uppercase tracking-[0.3em]">
+                {isPlaceholder ? 'En construcción' : project.name}
+              </span>
             </div>
-            <span className="font-mono text-[10px] uppercase tracking-[0.3em]">
-              {isPlaceholder ? 'En construcción' : project.name}
-            </span>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <DitherOverlay active={hover} />
 
