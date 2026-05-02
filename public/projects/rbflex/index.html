@@ -188,6 +188,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <style>
+    /* ───── Overrides para preview estática (sin main.js) ─────
+       La página original usaba IntersectionObserver para añadir
+       .visible a los .reveal y a .wa-bubble. Sin JS, el contenido
+       quedaba con opacity:0. Forzamos el estado final aquí. */
+    .reveal { opacity: 1 !important; transform: none !important; }
+    .reveal-delay-1,
+    .reveal-delay-2,
+    .reveal-delay-3,
+    .reveal-delay-4 { transition-delay: 0s !important; }
+    .wa-bubble {
+      opacity: 1 !important;
+      transform: scale(1) !important;
+      pointer-events: auto !important;
+    }
+
     /* ───── Portfolio preview banner (inyectado) ───── */
     .pp-preview-banner {
       position: fixed;
