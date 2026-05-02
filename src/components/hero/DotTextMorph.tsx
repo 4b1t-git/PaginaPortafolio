@@ -107,6 +107,15 @@ export default function DotTextMorph({
     // entre setTimeout (performance.now()) y RAF (frame start time).
     let pendingNew: Sampled[] | null = null
     let pendingOut: Sampled[] | null = null
+    // Cell efectivo se recalcula en cada resize: en pantallas estrechas
+    // el muestreo se aprieta para que las letras no queden agujereadas.
+    let effCell = cell
+
+    function computeEffCell(w: number) {
+      if (w < 480) return Math.max(3, Math.round(cell * 0.55)) // ~4
+      if (w < 768) return Math.max(4, Math.round(cell * 0.7))  // ~5
+      return cell
+    }
 
     function resize() {
       const r = wrap.getBoundingClientRect()
@@ -117,7 +126,8 @@ export default function DotTextMorph({
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      currentDots = sampleText(words[wordIndex], font, cell, width, height)
+      effCell = computeEffCell(width)
+      currentDots = sampleText(words[wordIndex], font, effCell, width, height)
       outgoingDots = []
       morphStart = -Infinity
       // Descarta cualquier transición pendiente: las posiciones quedaron
@@ -131,7 +141,7 @@ export default function DotTextMorph({
       // nuevos. El swap se aplica al inicio del próximo draw().
       wordIndex = (wordIndex + 1) % words.length
       pendingOut = currentDots
-      pendingNew = sampleText(words[wordIndex], font, cell, width, height)
+      pendingNew = sampleText(words[wordIndex], font, effCell, width, height)
     }
 
     function scheduleNext() {
