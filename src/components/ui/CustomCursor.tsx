@@ -1,13 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export default function CustomCursor() {
   const dotRef = useRef<HTMLDivElement>(null)
   const ringRef = useRef<HTMLDivElement>(null)
+  // Detecta dispositivo coarse / reduced-motion en mount; si aplica,
+  // no se renderizan los nodos (evitaba que quedaran fijos en 0,0 en
+  // tablet/teléfono porque el efecto bailout dejaba los <div> visibles).
+  const [enabled, setEnabled] = useState(false)
 
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const isCoarse = window.matchMedia('(pointer: coarse)').matches
+    const isCoarse = window.matchMedia('(pointer: coarse)').matches ||
+      !window.matchMedia('(hover: hover)').matches
     if (reduced || isCoarse) return
+    setEnabled(true)
+  }, [])
+
+  useEffect(() => {
+    if (!enabled) return
 
     document.documentElement.classList.add('has-custom-cursor')
 
@@ -58,7 +68,9 @@ export default function CustomCursor() {
       document.removeEventListener('mouseout', onLeave)
       document.documentElement.classList.remove('has-custom-cursor')
     }
-  }, [])
+  }, [enabled])
+
+  if (!enabled) return null
 
   return (
     <>
