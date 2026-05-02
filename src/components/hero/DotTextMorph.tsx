@@ -101,6 +101,12 @@ export default function DotTextMorph({
     let rafId: number
     let width = 0
     let height = 0
+    // Buffer de transición pendiente: nextWord() solo prepara los nuevos
+    // puntos; el swap real y el seteo de morphStart se hacen dentro de
+    // draw() usando el `now` del RAF, evitando desalineación de timestamps
+    // entre setTimeout (performance.now()) y RAF (frame start time).
+    let pendingNew: Sampled[] | null = null
+    let pendingOut: Sampled[] | null = null
 
     function resize() {
       const r = wrap.getBoundingClientRect()
@@ -114,13 +120,18 @@ export default function DotTextMorph({
       currentDots = sampleText(words[wordIndex], font, cell, width, height)
       outgoingDots = []
       morphStart = -Infinity
+      // Descarta cualquier transición pendiente: las posiciones quedaron
+      // calculadas para el tamaño anterior y producirían un salto.
+      pendingNew = null
+      pendingOut = null
     }
 
     function nextWord() {
-      outgoingDots = currentDots
+      // No tocar currentDots ni morphStart aquí: solo preparar los puntos
+      // nuevos. El swap se aplica al inicio del próximo draw().
       wordIndex = (wordIndex + 1) % words.length
-      currentDots = sampleText(words[wordIndex], font, cell, width, height)
-      morphStart = performance.now()
+      pendingOut = currentDots
+      pendingNew = sampleText(words[wordIndex], font, cell, width, height)
     }
 
     function scheduleNext() {
@@ -137,8 +148,20 @@ export default function DotTextMorph({
         return
       }
 
+      // Aplica la transición pendiente con el timestamp de RAF actual.
+      // Así morphElapsed empieza exactamente en 0 (no hay desalineación
+      // con performance.now() del setTimeout) y el primer frame siempre
+      // dibuja outgoing al 100% e incoming al 0%.
+      if (pendingNew) {
+        outgoingDots = pendingOut || []
+        currentDots = pendingNew
+        morphStart = now
+        pendingNew = null
+        pendingOut = null
+      }
+
       const morphElapsed = (now - morphStart) / morphMs
-      const morphing = morphElapsed >= 0 && morphElapsed <= 1
+      const morphing = morphElapsed <= 1 && morphElapsed >= 0
       const progress = Math.max(0, Math.min(1, morphElapsed))
       const time = now / 1000
 
