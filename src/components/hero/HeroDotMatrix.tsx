@@ -423,7 +423,6 @@ export default function HeroDotMatrix({ className }: Props) {
     const ctx = canvas.getContext('2d')!
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const isMobile = window.innerWidth < 768
 
     const off = document.createElement('canvas')
     const offCtx = off.getContext('2d', { willReadFrequently: true })!
@@ -528,8 +527,10 @@ export default function HeroDotMatrix({ className }: Props) {
         return
       }
       const cfg = cfgRef.current
-      const minDelta = isMobile ? 33 : 0
-      if (minDelta && now - lastFrame < minDelta) {
+      // Cap a ~30fps en todos los dispositivos: el ruido es lento y no se
+      // nota la diferencia con 60fps, libera ~50% CPU durante scroll.
+      const minDelta = 33
+      if (now - lastFrame < minDelta) {
         rafId = requestAnimationFrame(draw)
         return
       }
