@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createProgram, SNOISE_GLSL } from '@/lib/webgl'
 
-// Halftone procedural en canvas. Sustituye al fondo de montañas del hero.
+// Halftone procedural en WebGL2. Sustituye al fondo de montañas del hero.
 // Modos: text / image / shape. Onda horizontal gaussiana periódica.
-// Movimiento orgánico vía simplex 3D inline (sin dependencia externa).
-// Default: shape = "mountains" — 2 capas senoidales animadas.
+// Toda la animación por punto (montañas, ruido, mouse, onda) corre en el
+// vertex shader: el main thread solo sube uniforms. Default: shape =
+// "mountains" — 2 capas senoidales animadas.
 
 type Mode = 'text' | 'image' | 'shape'
 type Shape = 'mountains' | 'circle' | 'ring' | 'sine' | 'world' | 'grid' | 'spiral'
@@ -57,12 +59,6 @@ const SHAPES: { value: Shape; label: string }[] = [
 
 const COLOR_PRESETS = ['#0a0a0a', '#f0ead6', '#e8ff6b', '#ff8fb1']
 
-// ───────── Capas montañas ─────────
-const MOUNTAIN_LAYERS = [
-  { amp: 110, freq: 0.0029, phase: 1.3, speed: 0.24, base: 0.62, density: 0.8 },
-  { amp: 150, freq: 0.0022, phase: 2.8, speed: 0.16, base: 0.78, density: 1.0 },
-]
-
 // Hash determinista por celda — usado para enmascarar puntos y dar la
 // estética de partículas dispersas en vez de relleno sólido.
 function hash(i: number, j: number): number {
@@ -83,10 +79,7 @@ function loadConfig(): Config {
   }
 }
 
-// ───────── Simplex 3D inline ─────────
-// Implementación compacta basada en el algoritmo de Stefan Gustavson.
-// Devuelve valores aprox. en [-1, 1]. Tabla de permutación generada
-// con un PRNG simple para que el ruido no cambie entre recargas.
+// ───────── Simplex 3D inline (solo para el bake de "world") ─────────
 const GRAD3 = new Int8Array([
   1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1,
   1, 0, 1, -1, 0, -1, -1,
@@ -188,9 +181,9 @@ function makeNoise3(seed = 1337) {
 }
 
 // ───────── Bake del mapa de luminancia ─────────
-// Pinta texto / forma / imagen en un canvas oculto y devuelve el ImageData.
-// Para "mountains" no se hace bake: la densidad se calcula por celda en el
-// loop porque las capas se animan en el tiempo.
+// Pinta texto / forma / imagen en un canvas oculto que luego se sube como
+// textura. Para "mountains" no se hace bake: la densidad se calcula en el
+// vertex shader porque las capas se animan en el tiempo.
 
 function bakeText(ctx: CanvasRenderingContext2D, w: number, h: number, text: string, fontFam: string) {
   ctx.fillStyle = '#000'
@@ -310,9 +303,7 @@ function bakeShape(
       break
     }
     case 'mountains': {
-      // No-op aquí — el render de montañas se hace inline en el frame
-      // porque las capas se animan con el tiempo. Mantenemos el offscreen
-      // limpio para que sample devuelva 0 si por error se entra a esta rama.
+      // No-op — el render de montañas se hace en el vertex shader.
       break
     }
   }
@@ -335,7 +326,6 @@ function bakeImage(ctx: CanvasRenderingContext2D, w: number, h: number, img: HTM
   const dx = (w - dw) / 2
   const dy = (h - dh) / 2
   ctx.drawImage(img, dx, dy, dw, dh)
-  // pasar a escala de grises
   const id = ctx.getImageData(0, 0, w, h)
   const d = id.data
   for (let i = 0; i < d.length; i += 4) {
@@ -346,6 +336,133 @@ function bakeImage(ctx: CanvasRenderingContext2D, w: number, h: number, img: HTM
   }
   ctx.putImageData(id, 0, 0)
 }
+
+// ───────── Shaders ─────────
+
+const VERT = /* glsl */ `#version 300 es
+precision highp float;
+
+in vec2 a_cell;   // índice de celda (i, j)
+in float a_hash;  // hash determinista 0..1
+
+uniform vec2 u_res;        // tamaño en px CSS
+uniform float u_cell;
+uniform float u_dpr;
+uniform float u_time;      // segundos
+uniform vec2 u_mouse;      // px CSS, o (-9999,-9999)
+uniform float u_amp;
+uniform float u_baseRadius;
+uniform float u_noiseSpeed;
+uniform int u_mode;        // 0 = montañas, 1 = textura de luminancia
+uniform sampler2D u_lum;
+uniform int u_invert;
+uniform float u_wavePos;   // >900 si la onda está inactiva
+uniform float u_waveEnv;
+
+out float v_alpha;
+
+${SNOISE_GLSL}
+
+// Una capa de montaña: silueta senoidal animada.
+float layerHeight(float cx, float t, float amp, float freq, float phase, float speed, float base) {
+  float a = sin(cx * freq + phase + t * speed);
+  float b = sin(cx * freq * 1.7 + phase * 0.5 + t * speed * 0.6);
+  float w = (a + 0.5 * b) / 1.5;
+  return u_res.y * base - amp * w;
+}
+
+void main() {
+  float cell = u_cell;
+  float cx = a_cell.x * cell + cell * 0.5;
+  float cy = a_cell.y * cell + cell * 0.5;
+
+  float l = 0.0;
+  if (u_mode == 0) {
+    float density = 0.0;
+    float sh0 = layerHeight(cx, u_time, 110.0, 0.0029, 1.3, 0.24, 0.62);
+    if (cy > sh0) { float into = min(1.0, (cy - sh0) / 220.0); density += 0.8 * (0.25 + 0.75 * into); }
+    float sh1 = layerHeight(cx, u_time, 150.0, 0.0022, 2.8, 0.16, 0.78);
+    if (cy > sh1) { float into = min(1.0, (cy - sh1) / 220.0); density += 1.0 * (0.25 + 0.75 * into); }
+    density = min(1.0, density);
+    if (density < 0.04 || a_hash > density + 0.18) {
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      gl_PointSize = 0.0;
+      v_alpha = 0.0;
+      return;
+    }
+    l = density;
+  } else {
+    l = texture(u_lum, vec2(cx / u_res.x, cy / u_res.y)).r;
+    if (u_invert == 1) l = 1.0 - l;
+    if (l < 0.05) {
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      gl_PointSize = 0.0;
+      v_alpha = 0.0;
+      return;
+    }
+  }
+
+  float noiseT = u_time * u_noiseSpeed * 0.5;
+  float ny = snoise(vec3(cx * 0.01, cy * 0.01, noiseT));
+  float nx = snoise(vec3(cx * 0.01 + 100.0, cy * 0.01 + 100.0, noiseT));
+  float dx = nx * u_amp;
+  float dy = ny * u_amp;
+
+  float radius = u_baseRadius * l * (0.7 + 0.3 * (ny * 0.5 + 0.5));
+
+  if (u_mouse.x > -9000.0) {
+    float ddx = cx - u_mouse.x;
+    float ddy = cy - u_mouse.y;
+    float md2 = ddx * ddx + ddy * ddy;
+    float mouseR = 180.0;
+    if (md2 < mouseR * mouseR) {
+      float md = max(sqrt(md2), 0.0001);
+      float inf = 1.0 - md / mouseR;
+      radius *= 1.0 + inf * 1.4;
+      dx += (ddx / md) * inf * 5.0;
+      dy += (ddy / md) * inf * 5.0;
+    }
+  }
+
+  if (u_wavePos < 900.0) {
+    float d = cx / u_res.x - u_wavePos;
+    float sigma = 0.12;
+    float boost = exp(-(d * d) / (2.0 * sigma * sigma));
+    radius *= 1.0 + boost * u_waveEnv * 0.3;
+  }
+
+  if (radius < 0.25) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    v_alpha = 0.0;
+    return;
+  }
+
+  float px = cx + dx;
+  float py = cy + dy;
+  vec2 ndc = vec2((px / u_res.x) * 2.0 - 1.0, 1.0 - (py / u_res.y) * 2.0);
+  gl_Position = vec4(ndc, 0.0, 1.0);
+  gl_PointSize = radius * 2.0 * u_dpr;
+  v_alpha = 0.45 + l * 0.5;
+}
+`
+
+const FRAG = /* glsl */ `#version 300 es
+precision highp float;
+
+in float v_alpha;
+uniform vec3 u_color;
+out vec4 outColor;
+
+void main() {
+  if (v_alpha <= 0.0) discard;
+  vec2 pc = gl_PointCoord - 0.5;
+  float d = length(pc);
+  if (d > 0.5) discard;
+  float aa = smoothstep(0.5, 0.42, d);
+  outColor = vec4(u_color, v_alpha * aa);
+}
+`
 
 // ───────── Componente ─────────
 
@@ -415,11 +532,17 @@ export default function HeroDotMatrix({ className }: Props) {
     })
   }, [])
 
-  // ───────── Animation effect ─────────
+  // ───────── Animation effect (WebGL2) ─────────
   useEffect(() => {
     const canvas = canvasRef.current!
     const wrap = wrapRef.current!
-    const ctx = canvas.getContext('2d')!
+    const gl = canvas.getContext('webgl2', {
+      alpha: false,
+      antialias: true,
+      premultipliedAlpha: false,
+    })
+    if (!gl) return // sin WebGL2 el hero queda con el color de fondo
+
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -427,9 +550,55 @@ export default function HeroDotMatrix({ className }: Props) {
     const offCtx = off.getContext('2d', { willReadFrequently: true })!
     const simplex = makeNoise3(1337)
 
+    const program = createProgram(gl, VERT, FRAG)
+    const loc = {
+      a_cell: gl.getAttribLocation(program, 'a_cell'),
+      a_hash: gl.getAttribLocation(program, 'a_hash'),
+      u_res: gl.getUniformLocation(program, 'u_res'),
+      u_cell: gl.getUniformLocation(program, 'u_cell'),
+      u_dpr: gl.getUniformLocation(program, 'u_dpr'),
+      u_time: gl.getUniformLocation(program, 'u_time'),
+      u_mouse: gl.getUniformLocation(program, 'u_mouse'),
+      u_amp: gl.getUniformLocation(program, 'u_amp'),
+      u_baseRadius: gl.getUniformLocation(program, 'u_baseRadius'),
+      u_noiseSpeed: gl.getUniformLocation(program, 'u_noiseSpeed'),
+      u_mode: gl.getUniformLocation(program, 'u_mode'),
+      u_lum: gl.getUniformLocation(program, 'u_lum'),
+      u_invert: gl.getUniformLocation(program, 'u_invert'),
+      u_wavePos: gl.getUniformLocation(program, 'u_wavePos'),
+      u_waveEnv: gl.getUniformLocation(program, 'u_waveEnv'),
+      u_color: gl.getUniformLocation(program, 'u_color'),
+    }
+
+    const vao = gl.createVertexArray()!
+    const cellBuf = gl.createBuffer()!
+    const hashBuf = gl.createBuffer()!
+    gl.bindVertexArray(vao)
+    gl.bindBuffer(gl.ARRAY_BUFFER, cellBuf)
+    gl.enableVertexAttribArray(loc.a_cell)
+    gl.vertexAttribPointer(loc.a_cell, 2, gl.FLOAT, false, 0, 0)
+    gl.bindBuffer(gl.ARRAY_BUFFER, hashBuf)
+    gl.enableVertexAttribArray(loc.a_hash)
+    gl.vertexAttribPointer(loc.a_hash, 1, gl.FLOAT, false, 0, 0)
+    gl.bindVertexArray(null)
+
+    const lumTex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, lumTex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]))
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
     let width = 0
     let height = 0
-    let lumData: Uint8ClampedArray | null = null
+    let cols = 0
+    let rows = 0
+    let count = 0
+    let geomCell = 0
     let lumW = 0
     let lumH = 0
     let lastDirty = -1
@@ -442,16 +611,31 @@ export default function HeroDotMatrix({ className }: Props) {
     let waveStart = -Infinity
     let rafId = 0
     let lastFrame = 0
-    // Pausa el render cuando el hero sale del viewport: al hacer scroll por
-    // el resto de la página este loop dejaba de aportar nada pero seguía
-    // quemando CPU y compitiendo con el scroll suave.
+    // Pausa el render cuando el hero sale del viewport.
     let visible = true
 
-    // Buffers reusables — evita asignaciones por frame.
-    let mtnHeightBuf: Float32Array | null = null
-    let hashBuf: Float32Array | null = null
-    let bufCols = 0
-    let bufRows = 0
+    function buildGeometry() {
+      const cell = Math.max(2, cfgRef.current.cell)
+      cols = Math.ceil(width / cell) + 1
+      rows = Math.ceil(height / cell) + 1
+      count = cols * rows
+      geomCell = cell
+      const cells = new Float32Array(count * 2)
+      const hashes = new Float32Array(count)
+      let k = 0
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          cells[k * 2] = i
+          cells[k * 2 + 1] = j
+          hashes[k] = hash(i, j)
+          k++
+        }
+      }
+      gl!.bindBuffer(gl!.ARRAY_BUFFER, cellBuf)
+      gl!.bufferData(gl!.ARRAY_BUFFER, cells, gl!.DYNAMIC_DRAW)
+      gl!.bindBuffer(gl!.ARRAY_BUFFER, hashBuf)
+      gl!.bufferData(gl!.ARRAY_BUFFER, hashes, gl!.DYNAMIC_DRAW)
+    }
 
     function resize() {
       const r = wrap.getBoundingClientRect()
@@ -461,15 +645,13 @@ export default function HeroDotMatrix({ className }: Props) {
       canvas.height = Math.floor(height * dpr)
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      gl!.viewport(0, 0, canvas.width, canvas.height)
+      buildGeometry()
       lastDirty = -1
-      bufCols = 0
-      bufRows = 0
     }
 
     function rebakeIfNeeded() {
       const cfg = cfgRef.current
-      // Para "mountains" la densidad se computa inline cada frame.
       if (cfg.mode === 'shape' && cfg.shape === 'mountains') return
       if (lastDirty === lumDirtyRef.current && lumW === width && lumH === height) return
       lumW = width
@@ -487,27 +669,29 @@ export default function HeroDotMatrix({ className }: Props) {
           offCtx.fillRect(0, 0, width, height)
         }
       }
-      lumData = offCtx.getImageData(0, 0, width, height).data
+      gl!.bindTexture(gl!.TEXTURE_2D, lumTex)
+      gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, gl!.RGBA, gl!.UNSIGNED_BYTE, off)
       lastDirty = lumDirtyRef.current
     }
 
-    function readThemeColors() {
+    // Colores de tema cacheados — solo se releen al cambiar data-theme.
+    function readTheme() {
       const root = getComputedStyle(document.documentElement)
-      const fg = root.getPropertyValue('--fg').trim() || '10 10 10'
-      const bg = root.getPropertyValue('--bg').trim() || '240 234 214'
-      const fgParts = fg.split(/\s+|,/).map((n) => parseInt(n, 10) || 0)
-      const bgParts = bg.split(/\s+|,/).map((n) => parseInt(n, 10) || 0)
+      const parse = (s: string) => s.split(/\s+|,/).map((n) => parseInt(n, 10) || 0)
       return {
-        fg: `rgb(${fgParts.join(',')})`,
-        bg: `rgb(${bgParts.join(',')})`,
-        fgRgb: fgParts,
+        fg: parse(root.getPropertyValue('--fg').trim() || '10 10 10'),
+        bg: parse(root.getPropertyValue('--bg').trim() || '240 234 214'),
       }
     }
-    // Cachea los colores del tema y solo los actualiza cuando cambia
-    // `data-theme` en <html>. Evita un getComputedStyle por frame.
-    let themeCache = readThemeColors()
+    function hexRgb(hex: string): number[] {
+      const m = /^#?([0-9a-f]{6})$/i.exec(hex)
+      if (!m) return [10, 10, 10]
+      const h = m[1]
+      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+    }
+    let themeCache = readTheme()
     const themeObserver = new MutationObserver(() => {
-      themeCache = readThemeColors()
+      themeCache = readTheme()
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -529,206 +713,57 @@ export default function HeroDotMatrix({ className }: Props) {
         rafId = requestAnimationFrame(draw)
         return
       }
-      const cfg = cfgRef.current
-      // Cap a ~30fps en todos los dispositivos: el ruido es lento y no se
-      // nota la diferencia con 60fps, libera ~50% CPU durante scroll.
-      const minDelta = 33
-      if (now - lastFrame < minDelta) {
+      // Cap a ~30fps: el ruido es lento y libera GPU/CPU durante el scroll.
+      if (now - lastFrame < 33) {
         rafId = requestAnimationFrame(draw)
         return
       }
       lastFrame = now
 
+      const cfg = cfgRef.current
+      if (geomCell !== Math.max(2, cfg.cell)) buildGeometry()
       rebakeIfNeeded()
 
       const t = now / 1000
       const isMountains = cfg.mode === 'shape' && cfg.shape === 'mountains'
 
-      // Onda horizontal: cada `waveSeconds` se relanza una banda gaussiana
-      // que cruza el canvas en 4s, atenuada con sigma=0.12 (más ancha y
-      // suave que el ajuste original). Easing in-out para evitar entrada
-      // y salida bruscas.
-      if (now - waveStart > cfg.waveSeconds * 1000) {
-        waveStart = now
-      }
+      if (now - waveStart > cfg.waveSeconds * 1000) waveStart = now
       const waveElapsed = (now - waveStart) / 1000
       const waveDur = 4
       const waveActive = waveElapsed >= 0 && waveElapsed <= waveDur
-      // ease in-out: arranca lento, cruza, sale lento.
       const waveLin = waveActive ? waveElapsed / waveDur : 0
       const waveEase = waveLin * waveLin * (3 - 2 * waveLin)
       const wavePos = waveActive ? -0.2 + waveEase * 1.4 : 999
-      const waveSigma = 0.12
-      // Envelope: atenúa el pico al inicio y final del barrido para que
-      // el glow aparezca y desaparezca de forma orgánica.
-      const waveEnvelope = waveActive ? Math.sin(waveLin * Math.PI) : 0
+      const waveEnv = waveActive ? Math.sin(waveLin * Math.PI) : 0
 
       mouseX += (targetMX - mouseX) * 0.18
       mouseY += (targetMY - mouseY) * 0.18
 
-      const theme = themeCache
-      const dotCol = cfg.useThemeColors ? theme.fg : cfg.dotColor
-      const bgCol = cfg.useThemeColors ? theme.bg : cfg.bgColor
+      const dotRgb = cfg.useThemeColors ? themeCache.fg : hexRgb(cfg.dotColor)
+      const bgRgb = cfg.useThemeColors ? themeCache.bg : hexRgb(cfg.bgColor)
 
-      ctx.fillStyle = bgCol
-      ctx.fillRect(0, 0, width, height)
+      gl!.clearColor((bgRgb[0] || 0) / 255, (bgRgb[1] || 0) / 255, (bgRgb[2] || 0) / 255, 1)
+      gl!.clear(gl!.COLOR_BUFFER_BIT)
 
-      // Resolver dot color a tupla RGB
-      let dotR = 10, dotG = 10, dotB = 10
-      if (cfg.useThemeColors) {
-        dotR = theme.fgRgb[0] ?? 10
-        dotG = theme.fgRgb[1] ?? 10
-        dotB = theme.fgRgb[2] ?? 10
-      } else {
-        const m = /^#?([0-9a-f]{6})$/i.exec(dotCol)
-        if (m) {
-          const hex = m[1]
-          dotR = parseInt(hex.slice(0, 2), 16)
-          dotG = parseInt(hex.slice(2, 4), 16)
-          dotB = parseInt(hex.slice(4, 6), 16)
-        }
-      }
-
-      const cell = Math.max(2, cfg.cell)
-      const cols = Math.ceil(width / cell) + 1
-      const rows = Math.ceil(height / cell) + 1
-      const mouseR = 180
-      const mouseR2 = mouseR * mouseR
-      const noiseT = t * cfg.noiseSpeed * 0.5
-      const amp = reduced ? 0 : cfg.amplitude
-      const lum = lumData
-
-      // Pre-cálculo de alturas de capa por columna (solo modo mountains).
-      // Reusa Float32Array para evitar GC churn: layout [col0_l0, col0_l1,
-      // col0_l2, col1_l0, ...].
-      const NLAYERS = MOUNTAIN_LAYERS.length
-      if (isMountains) {
-        if (!mtnHeightBuf || bufCols !== cols) {
-          mtnHeightBuf = new Float32Array(cols * NLAYERS)
-          bufCols = cols
-        }
-        const mh = mtnHeightBuf
-        for (let i = 0; i < cols; i++) {
-          const x = i * cell
-          for (let li = 0; li < NLAYERS; li++) {
-            const l = MOUNTAIN_LAYERS[li]
-            const a = Math.sin(x * l.freq + l.phase + t * l.speed)
-            const b = Math.sin(x * l.freq * 1.7 + l.phase * 0.5 + t * l.speed * 0.6)
-            const wave = (a + 0.5 * b) / 1.5
-            mh[i * NLAYERS + li] = height * l.base - l.amp * wave
-          }
-        }
-        // Tabla hash precomputada por celda — evita recalcular el hash
-        // en cada frame durante la vida de este resize.
-        if (!hashBuf || bufCols !== cols || bufRows !== rows) {
-          hashBuf = new Float32Array(cols * rows)
-          for (let i = 0; i < cols; i++) {
-            for (let j = 0; j < rows; j++) {
-              hashBuf[j * cols + i] = hash(i, j)
-            }
-          }
-          bufRows = rows
-        }
-      }
-
-      const TWO_PI = Math.PI * 2
-
-      // Render por lotes: en vez de un beginPath/fillStyle/fill por punto
-      // (miles de llamadas por frame), se acumulan los arcos en NB Path2D
-      // según su alpha cuantizado. Al final: NB llamadas a fill(). El alpha
-      // va de 0.45 a 0.95, cuantizarlo en 24 niveles es imperceptible.
-      const NB = 24
-      const buckets: Path2D[] = new Array(NB)
-      for (let b = 0; b < NB; b++) buckets[b] = new Path2D()
-
-      for (let j = 0; j < rows; j++) {
-        const cy = j * cell + cell / 2
-        for (let i = 0; i < cols; i++) {
-          const cx = i * cell + cell / 2
-
-          // Determina luminancia / densidad por celda según modo.
-          let l = 0
-          if (isMountains) {
-            // Densidad = suma ponderada de capas cuya silueta queda por
-            // encima de cy. Cada capa aporta más conforme el punto está
-            // más adentro de la "ladera".
-            const base = i * NLAYERS
-            const mh = mtnHeightBuf!
-            let density = 0
-            for (let li = 0; li < NLAYERS; li++) {
-              const sh = mh[base + li]
-              if (cy > sh) {
-                const into = Math.min(1, (cy - sh) / 220)
-                density += MOUNTAIN_LAYERS[li].density * (0.25 + 0.75 * into)
-              }
-            }
-            if (density < 0.04) continue
-            density = Math.min(1, density)
-            // Máscara hash dispersa los puntos para no rellenar sólido.
-            const r = hashBuf![j * cols + i]
-            if (r > density + 0.18) continue
-            l = density
-          } else {
-            const px = Math.min(width - 1, Math.max(0, cx | 0))
-            const py = Math.min(height - 1, Math.max(0, cy | 0))
-            const idx = (py * width + px) * 4
-            l = lum ? lum[idx] / 255 : 0
-            if (cfg.invertLuminance) l = 1 - l
-            if (l < 0.05) continue
-          }
-
-          // Ruido orgánico: dx/dy y modulación de radio.
-          // 0.01 controla la longitud de onda espacial; valores menores
-          // = ondas más grandes y suaves.
-          const ny = simplex(cx * 0.01, cy * 0.01, noiseT)
-          const nx = simplex(cx * 0.01 + 100, cy * 0.01 + 100, noiseT)
-          let dx = nx * amp
-          let dy = ny * amp
-
-          // Radio = base * luminancia * (0.7 + 0.3 * ruido_normalizado)
-          // Piso de 70% para evitar parpadeo brusco entre frames.
-          let radius = cfg.baseRadius * l * (0.7 + 0.3 * (ny * 0.5 + 0.5))
-
-          // Mouse: empuja radialmente y agranda.
-          if (mouseX > -9000) {
-            const ddx = cx - mouseX
-            const ddy = cy - mouseY
-            const md2 = ddx * ddx + ddy * ddy
-            if (md2 < mouseR2) {
-              const md = Math.sqrt(md2) || 0.0001
-              const inf = 1 - md / mouseR
-              radius *= 1 + inf * 1.4
-              dx += (ddx / md) * inf * 5
-              dy += (ddy / md) * inf * 5
-            }
-          }
-
-          // Banda gaussiana horizontal (onda). Boost reducido a 0.3 y
-          // multiplicado por envelope sin para entrada/salida suaves.
-          if (waveActive) {
-            const d = cx / width - wavePos
-            const boost = Math.exp(-(d * d) / (2 * waveSigma * waveSigma))
-            radius *= 1 + boost * waveEnvelope * 0.3
-          }
-
-          if (radius < 0.25) continue
-
-          let bi = (l * NB) | 0
-          if (bi < 0) bi = 0
-          else if (bi >= NB) bi = NB - 1
-          const px = cx + dx
-          const py = cy + dy
-          const p = buckets[bi]
-          p.moveTo(px + radius, py)
-          p.arc(px, py, radius, 0, TWO_PI)
-        }
-      }
-
-      for (let b = 0; b < NB; b++) {
-        const a = 0.45 + ((b + 0.5) / NB) * 0.5
-        ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${a.toFixed(3)})`
-        ctx.fill(buckets[b])
-      }
+      gl!.useProgram(program)
+      gl!.bindVertexArray(vao)
+      gl!.uniform2f(loc.u_res, width, height)
+      gl!.uniform1f(loc.u_cell, geomCell)
+      gl!.uniform1f(loc.u_dpr, dpr)
+      gl!.uniform1f(loc.u_time, t)
+      gl!.uniform2f(loc.u_mouse, mouseX, mouseY)
+      gl!.uniform1f(loc.u_amp, reduced ? 0 : cfg.amplitude)
+      gl!.uniform1f(loc.u_baseRadius, cfg.baseRadius)
+      gl!.uniform1f(loc.u_noiseSpeed, cfg.noiseSpeed)
+      gl!.uniform1i(loc.u_mode, isMountains ? 0 : 1)
+      gl!.uniform1i(loc.u_invert, cfg.invertLuminance ? 1 : 0)
+      gl!.uniform1f(loc.u_wavePos, wavePos)
+      gl!.uniform1f(loc.u_waveEnv, waveEnv)
+      gl!.uniform3f(loc.u_color, (dotRgb[0] || 0) / 255, (dotRgb[1] || 0) / 255, (dotRgb[2] || 0) / 255)
+      gl!.activeTexture(gl!.TEXTURE0)
+      gl!.bindTexture(gl!.TEXTURE_2D, lumTex)
+      gl!.uniform1i(loc.u_lum, 0)
+      gl!.drawArrays(gl!.POINTS, 0, count)
 
       rafId = requestAnimationFrame(draw)
     }
@@ -754,6 +789,11 @@ export default function HeroDotMatrix({ className }: Props) {
       themeObserver.disconnect()
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseleave', onLeave)
+      gl.deleteProgram(program)
+      gl.deleteBuffer(cellBuf)
+      gl.deleteBuffer(hashBuf)
+      gl.deleteVertexArray(vao)
+      gl.deleteTexture(lumTex)
     }
   }, [])
 
