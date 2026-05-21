@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 // Halftone procedural en canvas. Sustituye al fondo de montañas del hero.
 // Modos: text / image / shape. Onda horizontal gaussiana periódica.
 // Movimiento orgánico vía simplex 3D inline (sin dependencia externa).
-// Default: shape = "mountains" — 3 capas senoidales animadas.
+// Default: shape = "mountains" — 2 capas senoidales animadas.
 
 type Mode = 'text' | 'image' | 'shape'
 type Shape = 'mountains' | 'circle' | 'ring' | 'sine' | 'world' | 'grid' | 'spiral'
@@ -46,7 +46,7 @@ const DEFAULTS: Config = {
 
 const FONTS = ['Inter', 'Instrument Serif', 'Fraunces', 'JetBrains Mono', 'Space Grotesk']
 const SHAPES: { value: Shape; label: string }[] = [
-  { value: 'mountains', label: 'Montañas (3 capas)' },
+  { value: 'mountains', label: 'Montañas (2 capas)' },
   { value: 'circle', label: 'Círculo' },
   { value: 'ring', label: 'Anillo' },
   { value: 'sine', label: 'Onda sinusoidal' },
@@ -57,9 +57,8 @@ const SHAPES: { value: Shape; label: string }[] = [
 
 const COLOR_PRESETS = ['#0a0a0a', '#f0ead6', '#e8ff6b', '#ff8fb1']
 
-// ───────── Capas montañas (mismas que el DotMountains original) ─────────
+// ───────── Capas montañas ─────────
 const MOUNTAIN_LAYERS = [
-  { amp: 70, freq: 0.0038, phase: 0.0, speed: 0.18, base: 0.5, density: 0.55 },
   { amp: 110, freq: 0.0029, phase: 1.3, speed: 0.24, base: 0.62, density: 0.8 },
   { amp: 150, freq: 0.0022, phase: 2.8, speed: 0.16, base: 0.78, density: 1.0 },
 ]
