@@ -442,6 +442,10 @@ export default function HeroDotMatrix({ className }: Props) {
     let waveStart = -Infinity
     let rafId = 0
     let lastFrame = 0
+    // Pausa el render cuando el hero sale del viewport: al hacer scroll por
+    // el resto de la página este loop dejaba de aportar nada pero seguía
+    // quemando CPU y compitiendo con el scroll suave.
+    let visible = true
 
     // Buffers reusables — evita asignaciones por frame.
     let mtnHeightBuf: Float32Array | null = null
@@ -521,7 +525,7 @@ export default function HeroDotMatrix({ className }: Props) {
     }
 
     function draw(now: number) {
-      if (document.hidden) {
+      if (document.hidden || !visible) {
         rafId = requestAnimationFrame(draw)
         return
       }
@@ -629,6 +633,14 @@ export default function HeroDotMatrix({ className }: Props) {
 
       const TWO_PI = Math.PI * 2
 
+      // Render por lotes: en vez de un beginPath/fillStyle/fill por punto
+      // (miles de llamadas por frame), se acumulan los arcos en NB Path2D
+      // según su alpha cuantizado. Al final: NB llamadas a fill(). El alpha
+      // va de 0.45 a 0.95, cuantizarlo en 24 niveles es imperceptible.
+      const NB = 24
+      const buckets: Path2D[] = new Array(NB)
+      for (let b = 0; b < NB; b++) buckets[b] = new Path2D()
+
       for (let j = 0; j < rows; j++) {
         const cy = j * cell + cell / 2
         for (let i = 0; i < cols; i++) {
@@ -701,11 +713,21 @@ export default function HeroDotMatrix({ className }: Props) {
 
           if (radius < 0.25) continue
 
-          ctx.beginPath()
-          ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${(0.45 + l * 0.5).toFixed(3)})`
-          ctx.arc(cx + dx, cy + dy, radius, 0, TWO_PI)
-          ctx.fill()
+          let bi = (l * NB) | 0
+          if (bi < 0) bi = 0
+          else if (bi >= NB) bi = NB - 1
+          const px = cx + dx
+          const py = cy + dy
+          const p = buckets[bi]
+          p.moveTo(px + radius, py)
+          p.arc(px, py, radius, 0, TWO_PI)
         }
+      }
+
+      for (let b = 0; b < NB; b++) {
+        const a = 0.45 + ((b + 0.5) / NB) * 0.5
+        ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${a.toFixed(3)})`
+        ctx.fill(buckets[b])
       }
 
       rafId = requestAnimationFrame(draw)
@@ -714,6 +736,13 @@ export default function HeroDotMatrix({ className }: Props) {
     resize()
     const ro = new ResizeObserver(resize)
     ro.observe(wrap)
+    const io = new IntersectionObserver(
+      (entries) => {
+        visible = entries[0]?.isIntersecting ?? true
+      },
+      { threshold: 0 },
+    )
+    io.observe(wrap)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseleave', onLeave)
     rafId = requestAnimationFrame(draw)
@@ -721,6 +750,7 @@ export default function HeroDotMatrix({ className }: Props) {
     return () => {
       cancelAnimationFrame(rafId)
       ro.disconnect()
+      io.disconnect()
       themeObserver.disconnect()
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseleave', onLeave)

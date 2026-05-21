@@ -110,6 +110,26 @@ export default function DotTextMorph({
     // Cell efectivo se recalcula en cada resize: en pantallas estrechas
     // el muestreo se aprieta para que las letras no queden agujereadas.
     let effCell = cell
+    // Pausa el render cuando el texto sale del viewport — evita correr el
+    // RAF al hacer scroll por el resto de la página.
+    let visible = true
+
+    // Color de tema cacheado: leerlo con getComputedStyle cada frame era
+    // caro. Se relee solo cuando cambia data-theme en <html>.
+    function readFg() {
+      return (
+        getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() ||
+        '10 10 10'
+      ).replaceAll(' ', ',')
+    }
+    let fgCache = readFg()
+    const themeObserver = new MutationObserver(() => {
+      fgCache = readFg()
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
 
     function computeEffCell(w: number) {
       if (w < 480) return Math.max(3, Math.round(cell * 0.55)) // ~4
@@ -153,7 +173,7 @@ export default function DotTextMorph({
     }
 
     function draw(now: number) {
-      if (document.hidden) {
+      if (document.hidden || !visible) {
         rafId = requestAnimationFrame(draw)
         return
       }
@@ -176,10 +196,7 @@ export default function DotTextMorph({
       const time = now / 1000
 
       ctx.clearRect(0, 0, width, height)
-      const fg = (
-        getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() ||
-        '10 10 10'
-      ).replaceAll(' ', ',')
+      const fg = fgCache
 
       const drawDot = (
         d: Sampled,
@@ -246,6 +263,13 @@ export default function DotTextMorph({
 
     const ro = new ResizeObserver(resize)
     ro.observe(wrap)
+    const io = new IntersectionObserver(
+      (entries) => {
+        visible = entries[0]?.isIntersecting ?? true
+      },
+      { threshold: 0 },
+    )
+    io.observe(wrap)
     resize()
     scheduleNext()
     rafId = requestAnimationFrame(draw)
@@ -254,6 +278,8 @@ export default function DotTextMorph({
       cancelAnimationFrame(rafId)
       if (scheduled) clearTimeout(scheduled)
       ro.disconnect()
+      io.disconnect()
+      themeObserver.disconnect()
     }
   }, [words, intervalMs, morphMs, font, cell, dotRadius, fallDistance])
 
