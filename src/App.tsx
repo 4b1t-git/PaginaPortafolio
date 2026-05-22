@@ -1,5 +1,4 @@
 import Navbar from '@/components/nav/Navbar'
-import CustomCursor from '@/components/ui/CustomCursor'
 import Hero from '@/components/hero/Hero'
 import Gallery from '@/components/gallery/Gallery'
 import About from '@/components/sections/About'
@@ -13,7 +12,6 @@ export default function App() {
 
   return (
     <>
-      <CustomCursor />
       <Navbar />
 
       <main id="top" className="relative z-10">

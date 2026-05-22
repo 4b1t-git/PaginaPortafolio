@@ -349,7 +349,6 @@ uniform vec2 u_res;        // tamaño en px CSS
 uniform float u_cell;
 uniform float u_dpr;
 uniform float u_time;      // segundos
-uniform vec2 u_mouse;      // px CSS, o (-9999,-9999)
 uniform float u_amp;
 uniform float u_baseRadius;
 uniform float u_noiseSpeed;
@@ -409,20 +408,6 @@ void main() {
   float dy = ny * u_amp;
 
   float radius = u_baseRadius * l * (0.7 + 0.3 * (ny * 0.5 + 0.5));
-
-  if (u_mouse.x > -9000.0) {
-    float ddx = cx - u_mouse.x;
-    float ddy = cy - u_mouse.y;
-    float md2 = ddx * ddx + ddy * ddy;
-    float mouseR = 180.0;
-    if (md2 < mouseR * mouseR) {
-      float md = max(sqrt(md2), 0.0001);
-      float inf = 1.0 - md / mouseR;
-      radius *= 1.0 + inf * 1.4;
-      dx += (ddx / md) * inf * 5.0;
-      dy += (ddy / md) * inf * 5.0;
-    }
-  }
 
   if (u_wavePos < 900.0) {
     float d = cx / u_res.x - u_wavePos;
@@ -558,7 +543,6 @@ export default function HeroDotMatrix({ className }: Props) {
       u_cell: gl.getUniformLocation(program, 'u_cell'),
       u_dpr: gl.getUniformLocation(program, 'u_dpr'),
       u_time: gl.getUniformLocation(program, 'u_time'),
-      u_mouse: gl.getUniformLocation(program, 'u_mouse'),
       u_amp: gl.getUniformLocation(program, 'u_amp'),
       u_baseRadius: gl.getUniformLocation(program, 'u_baseRadius'),
       u_noiseSpeed: gl.getUniformLocation(program, 'u_noiseSpeed'),
@@ -602,11 +586,6 @@ export default function HeroDotMatrix({ className }: Props) {
     let lumW = 0
     let lumH = 0
     let lastDirty = -1
-
-    let mouseX = -9999
-    let mouseY = -9999
-    let targetMX = -9999
-    let targetMY = -9999
 
     let waveStart = -Infinity
     let rafId = 0
@@ -698,16 +677,6 @@ export default function HeroDotMatrix({ className }: Props) {
       attributeFilter: ['data-theme'],
     })
 
-    function onMove(e: MouseEvent) {
-      const r = wrap.getBoundingClientRect()
-      targetMX = e.clientX - r.left
-      targetMY = e.clientY - r.top
-    }
-    function onLeave() {
-      targetMX = -9999
-      targetMY = -9999
-    }
-
     function draw(now: number) {
       if (document.hidden || !visible) {
         rafId = requestAnimationFrame(draw)
@@ -736,9 +705,6 @@ export default function HeroDotMatrix({ className }: Props) {
       const wavePos = waveActive ? -0.2 + waveEase * 1.4 : 999
       const waveEnv = waveActive ? Math.sin(waveLin * Math.PI) : 0
 
-      mouseX += (targetMX - mouseX) * 0.18
-      mouseY += (targetMY - mouseY) * 0.18
-
       const dotRgb = cfg.useThemeColors ? themeCache.fg : hexRgb(cfg.dotColor)
       const bgRgb = cfg.useThemeColors ? themeCache.bg : hexRgb(cfg.bgColor)
 
@@ -751,7 +717,6 @@ export default function HeroDotMatrix({ className }: Props) {
       gl!.uniform1f(loc.u_cell, geomCell)
       gl!.uniform1f(loc.u_dpr, dpr)
       gl!.uniform1f(loc.u_time, t)
-      gl!.uniform2f(loc.u_mouse, mouseX, mouseY)
       gl!.uniform1f(loc.u_amp, reduced ? 0 : cfg.amplitude)
       gl!.uniform1f(loc.u_baseRadius, cfg.baseRadius)
       gl!.uniform1f(loc.u_noiseSpeed, cfg.noiseSpeed)
@@ -778,8 +743,6 @@ export default function HeroDotMatrix({ className }: Props) {
       { threshold: 0 },
     )
     io.observe(wrap)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseleave', onLeave)
     rafId = requestAnimationFrame(draw)
 
     return () => {
@@ -787,8 +750,6 @@ export default function HeroDotMatrix({ className }: Props) {
       ro.disconnect()
       io.disconnect()
       themeObserver.disconnect()
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseleave', onLeave)
       gl.deleteProgram(program)
       gl.deleteBuffer(cellBuf)
       gl.deleteBuffer(hashBuf)
