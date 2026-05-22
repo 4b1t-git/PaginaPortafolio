@@ -84,6 +84,28 @@ export default function ProjectCard({ project }: Props) {
   const [hover, setHover] = useState(false)
   const isPlaceholder = project.status === 'wip'
 
+  // El badge "LIVE" solo aparece si el sitio del trabajo responde. Un
+  // fetch no-cors se resuelve si el dominio conecta y se rechaza ante un
+  // fallo de red/DNS — suficiente para saber si sigue en linea.
+  const [liveOk, setLiveOk] = useState(false)
+  useEffect(() => {
+    if (project.status !== 'live' || !project.url) return
+    let cancelled = false
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 6000)
+    fetch(project.url, { mode: 'no-cors', signal: ctrl.signal })
+      .then(() => {
+        if (!cancelled) setLiveOk(true)
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(timer))
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      ctrl.abort()
+    }
+  }, [project.status, project.url])
+
   const inner = (
     <article
       onMouseEnter={() => setHover(true)}
@@ -143,7 +165,7 @@ export default function ProjectCard({ project }: Props) {
             WIP
           </span>
         )}
-        {project.status === 'live' && (
+        {project.status === 'live' && liveOk && (
           <span className="px-2 py-1 rounded-full bg-[var(--color-accent-lime)]/90 text-black border border-black/10">
             LIVE ↗
           </span>
