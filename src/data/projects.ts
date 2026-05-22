@@ -20,6 +20,7 @@ export const projects: Project[] = [
       'Landing para empresa de reparación hidráulica en Chile. Maquetada custom, SEO técnico, datos estructurados.',
     url: 'https://rb-flex.com/',
     embed: 'projects/rbflex/index.html',
+    image: 'projects/rbflex/preview.jpg',
     stack: ['HTML', 'CSS', 'JS'],
     tags: ['landing', 'web'],
     year: 2025,

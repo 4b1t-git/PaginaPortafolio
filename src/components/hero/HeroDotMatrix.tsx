@@ -592,17 +592,29 @@ export default function HeroDotMatrix({ className }: Props) {
     let lastFrame = 0
     // Pausa el render cuando el hero sale del viewport.
     let visible = true
+    let geomMtn = false
 
     function buildGeometry() {
-      const cell = Math.max(2, cfgRef.current.cell)
+      const cfg = cfgRef.current
+      const cell = Math.max(2, cfg.cell)
+      const isMtn = cfg.mode === 'shape' && cfg.shape === 'mountains'
       cols = Math.ceil(width / cell) + 1
       rows = Math.ceil(height / cell) + 1
-      count = cols * rows
       geomCell = cell
+      geomMtn = isMtn
+      // En modo montañas las filas superiores nunca encienden: la silueta
+      // más alta (capa 0) queda sobre height*0.62 - 110. Saltarlas evita
+      // ejecutar el vertex shader para puntos que siempre se descartan.
+      let startRow = 0
+      if (isMtn) {
+        const topLit = height * 0.62 - 110 - (cell * 2 + 16)
+        startRow = Math.max(0, Math.floor(topLit / cell))
+      }
+      count = cols * (rows - startRow)
       const cells = new Float32Array(count * 2)
       const hashes = new Float32Array(count)
       let k = 0
-      for (let j = 0; j < rows; j++) {
+      for (let j = startRow; j < rows; j++) {
         for (let i = 0; i < cols; i++) {
           cells[k * 2] = i
           cells[k * 2 + 1] = j
@@ -690,11 +702,11 @@ export default function HeroDotMatrix({ className }: Props) {
       lastFrame = now
 
       const cfg = cfgRef.current
-      if (geomCell !== Math.max(2, cfg.cell)) buildGeometry()
+      const isMountains = cfg.mode === 'shape' && cfg.shape === 'mountains'
+      if (geomCell !== Math.max(2, cfg.cell) || geomMtn !== isMountains) buildGeometry()
       rebakeIfNeeded()
 
       const t = now / 1000
-      const isMountains = cfg.mode === 'shape' && cfg.shape === 'mountains'
 
       if (now - waveStart > cfg.waveSeconds * 1000) waveStart = now
       const waveElapsed = (now - waveStart) / 1000

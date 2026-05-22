@@ -5,11 +5,8 @@ import About from '@/components/sections/About'
 import Stack from '@/components/sections/Stack'
 import Contact from '@/components/sections/Contact'
 import Footer from '@/components/sections/Footer'
-import { useLenis } from '@/hooks/useLenis'
 
 export default function App() {
-  useLenis()
-
   return (
     <>
       <Navbar />
