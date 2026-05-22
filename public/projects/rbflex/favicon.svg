@@ -1,7 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#0d1220"/>
-  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle"
-        font-family="'Outfit','Helvetica Neue',Arial,sans-serif"
-        font-weight="800" font-size="34" fill="#d6202a"
-        letter-spacing="-1">RB</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
+  <g fill="#e8ff6b">
+    <circle cx="8" cy="8" r="2"/>
+    <circle cx="16" cy="8" r="2"/>
+    <circle cx="24" cy="8" r="2"/>
+    <circle cx="8" cy="16" r="2"/>
+    <circle cx="24" cy="16" r="2"/>
+    <circle cx="8" cy="24" r="2"/>
+    <circle cx="16" cy="24" r="2"/>
+    <circle cx="24" cy="24" r="2"/>
+  </g>
 </svg>
