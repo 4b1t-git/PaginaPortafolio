@@ -44,9 +44,6 @@ export default function Hero() {
         </div>
       </div>
 
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 font-mono text-[10px] uppercase tracking-[0.3em] opacity-40">
-        Scroll ↓
-      </div>
     </section>
   )
 }
