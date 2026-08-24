@@ -314,8 +314,8 @@ function bakeImage(ctx: CanvasRenderingContext2D, w: number, h: number, img: HTM
   ctx.fillRect(0, 0, w, h)
   const ar = img.width / img.height
   const cr = w / h
-  let dw = w
-  let dh = h
+  let dw: number
+  let dh: number
   if (ar > cr) {
     dw = w
     dh = w / ar
@@ -852,6 +852,7 @@ function ControlPanel({ config, update, onFile, reset }: PanelProps) {
               {(['text', 'image', 'shape'] as Mode[]).map((m) => (
                 <button
                   key={m}
+                  aria-pressed={config.mode === m}
                   type="button"
                   onClick={() => update('mode', m)}
                   className="px-2 py-1 rounded border text-[10px] uppercase tracking-wider"
