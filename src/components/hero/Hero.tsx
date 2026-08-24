@@ -10,16 +10,16 @@ export default function Hero() {
       <div className="relative z-10 flex flex-col items-center w-full md:-mt-28 lg:-mt-40 xl:-mt-48">
         <span className="mb-6 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] opacity-60">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-          Disponible para proyectos
+          Disponible para proyectos web
         </span>
 
         <DotTextMorph
-          words={['FRONTEND', 'DESIGN', 'CODE', 'IGNACIO']}
+          words={['DISEÑO', 'CÓDIGO', 'VELOCIDAD', 'RESULTADOS']}
           className="w-full max-w-5xl h-[34vh] md:h-[44vh]"
         />
 
         <p className="mt-6 max-w-xl text-center font-mono text-sm md:text-base opacity-70">
-          Construyo experiencias digitales que conectan.
+          Diseño y desarrollo sitios web rápidos, claros y pensados para convertir visitas en clientes.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center gap-3">
@@ -31,7 +31,7 @@ export default function Hero() {
                 'linear-gradient(135deg, var(--color-accent-pink), var(--color-accent-lime))',
             }}
           >
-            Ver proyectos
+            Ver trabajos
             <span aria-hidden>→</span>
           </MagneticButton>
 
@@ -39,7 +39,7 @@ export default function Hero() {
             href="#contacto"
             className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-mono text-sm uppercase tracking-wider border border-current/30 hover:border-current/70 transition-colors"
           >
-            Contacto
+            Hablemos
           </MagneticButton>
         </div>
       </div>

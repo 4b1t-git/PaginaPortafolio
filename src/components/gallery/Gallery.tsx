@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { AnimatePresence } from 'motion/react'
+import * as m from 'motion/react-m'
 import { projects, filterTags, type FilterTag } from '@/data/projects'
 import ProjectCard from '@/components/gallery/ProjectCard'
 
@@ -35,23 +37,52 @@ export default function Gallery() {
               <button
                 key={t}
                 onClick={() => setActive(t)}
+                aria-pressed={active === t}
                 data-cursor="hover"
-                className={`font-mono text-[11px] uppercase tracking-[0.2em] px-3.5 py-2 rounded-full border transition-colors ${
+                className={`relative isolate overflow-hidden font-mono text-[11px] uppercase tracking-[0.2em] px-3.5 py-2 rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current ${
                   active === t
-                    ? 'bg-current text-[var(--color-bg)] border-current'
+                    ? 'border-current'
                     : 'border-current/20 hover:border-current/60'
                 }`}
               >
-                {t}
+                {active === t && (
+                  <m.span
+                    layoutId="active-project-filter"
+                    aria-hidden
+                    className="absolute inset-0 rounded-full bg-[rgb(var(--fg))]"
+                    transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                  />
+                )}
+                <span
+                  className={`relative z-10 transition-colors ${
+                    active === t ? 'text-[rgb(var(--bg))]' : ''
+                  }`}
+                >
+                  {t}
+                </span>
               </button>
             ))}
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-          {visible.map((p) => (
-            <ProjectCard key={p.id} project={p} />
-          ))}
+        <div className="relative grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+          <AnimatePresence mode="popLayout" initial={false}>
+            {visible.map((p) => (
+              <m.div
+                key={p.id}
+                layout="position"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  layout: { type: 'spring', stiffness: 320, damping: 32 },
+                  opacity: { duration: 0.18 },
+                }}
+              >
+                <ProjectCard project={p} />
+              </m.div>
+            ))}
+          </AnimatePresence>
         </div>
 
         {visible.length === 0 && (

@@ -140,7 +140,7 @@ export default function ProjectCard({ project }: Props) {
 
       <DitherOverlay active={hover} />
 
-      <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between gap-4 bg-gradient-to-t from-black/40 to-transparent text-white opacity-0 group-hover:opacity-100 transition-opacity duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]">
+      <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between gap-4 bg-gradient-to-t from-black/40 to-transparent text-white opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]">
         <div>
           <h3 className="font-display text-lg uppercase tracking-wider">
             {project.name}
@@ -189,7 +189,7 @@ export default function ProjectCard({ project }: Props) {
         href={cardHref}
         target={sameTab ? '_self' : '_blank'}
         rel={sameTab ? undefined : 'noopener noreferrer'}
-        className="block"
+        className="group block rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
       >
         {inner}
       </a>
