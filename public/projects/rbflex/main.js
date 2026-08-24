@@ -1,8 +1,8 @@
 /* ─────────────────────────────────────────
    RB Flex — versión preview para el portfolio.
-   Solo animaciones de frontend: scroll reveal, navbar glass, slider y
-   resaltado de navegación. Sin WhatsApp, sin envío de formulario ni
-   integraciones externas — el formulario queda inerte (demo).
+   Solo animaciones de frontend: scroll reveal, navbar glass, slider,
+   resaltado de navegación y carcasa visual de WhatsApp. Sin envío de
+   formulario ni acciones comerciales — todos los controles quedan inertes.
 ───────────────────────────────────────── */
 (function () {
   'use strict';
@@ -171,6 +171,19 @@
     });
   }
 
+  /* ─── WHATSAPP — visible como en producción, pero sin acción ─── */
+  const waBubble = document.getElementById('wa-bubble');
+  if (waBubble) waBubble.classList.add('visible');
+
+  const contactSection = document.getElementById('contacto');
+  if (contactSection && waBubble) {
+    const contactObserver = new IntersectionObserver(
+      ([entry]) => waBubble.classList.toggle('wa-hidden', entry.isIntersecting),
+      { threshold: 0.15 }
+    );
+    contactObserver.observe(contactSection);
+  }
+
   /* ─── ACTIVE NAV LINK highlight ─── */
   const sections   = document.querySelectorAll('section[id]');
   const navAnchors = document.querySelectorAll('.nav-links a');
@@ -190,6 +203,18 @@
     { threshold: 0.4 }
   );
   sections.forEach((s) => secObserver.observe(s));
+
+  /* ─── ANCHOR LINKS — scroll sin cambiar la URL ─── */
+  document.querySelectorAll('a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      const id = a.getAttribute('href').slice(1);
+      if (!id) return;
+      const target = document.getElementById(id);
+      if (!target) return;
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 
   /* ─── FORMULARIO — inerte en la preview (sin envío real) ─── */
   const form = document.getElementById('contact-form');
